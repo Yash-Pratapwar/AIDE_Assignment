@@ -262,11 +262,67 @@ Whenever a decision is revised, capture the new decision and the reason for the 
   - Treat the POS value as canonical and discard ERP history
 - Impact: Phase 5 reconciliation must choose/document which channel definition supports each business question.
 
+## Phase 5 decisions
+
+### 27) Use POS transaction lines as the canonical sales grain and keep ERP orders non-additive
+- Date: 2026-10-27
+- Decision: Define the reconciled sales fact at deduplicated POS line grain; retain current ERP order-header values only as separate comparison evidence and never add them to POS sales.
+- Context: POS and ERP order headers have no shared transaction/order key in the provided data. ERP records are order lifecycle snapshots, have delete tombstones, and one source system has a documented freight valuation issue; they do not represent a directly joinable invoice fact.
+- Alternatives considered:
+  - Add POS and ERP values together
+  - Treat ERP order-header gross as an invoice/posted-sales fact
+- Impact: Sales totals remain attributable to POS rows; ERP values can be compared without double counting or implying unsupported equivalence.
+
+### 28) Define POS gross and net sales exclusive of tax
+- Date: 2026-10-27
+- Decision: Define gross sales as quantity times the tax-exclusive POS unit price before discounts; define net sales as gross less line discount, still before tax; retain tax as a separate amount.
+- Context: The POS contract explicitly says unit price is exclusive of tax and discounts/tax are supplied as line-level fields.
+- Alternatives considered:
+  - Include tax in sales totals
+  - Call gross-after-discount the gross measure
+- Impact: Finance comparison must be labelled as a like-for-like check only if Finance confirms the same tax/discount convention.
+
+### 29) Use POS-captured channel for sales attribution and retain ERP channel as a diagnostic
+- Date: 2026-10-27
+- Decision: Attribute POS revenue to the channel captured at the POS line; preserve ERP channel history separately and flag discrepancies.
+- Context: POS carries a transaction-time captured channel, while ERP channel updates have major mismatches and no independently confirmed business rule for which system owns historical classification.
+- Alternatives considered:
+  - Replace POS channel with ERP effective-dated channel
+  - Discard ERP channel evidence
+- Impact: The fact remains traceable to the transactional source; channel-mismatch counts are exposed for business review.
+
+### 30) Preserve sales rows with unresolved dimensions
+- Date: 2026-10-27
+- Decision: Keep valid, timestamped POS lines in the sales total even if an outlet/product/channel dimension lookup is unresolved; retain null dimension keys and quality flags.
+- Context: Dimension history has key gaps. Excluding these rows without a business-approved policy would silently understate sales.
+- Alternatives considered:
+  - Filter unresolved rows out of sales totals
+  - Assign a fabricated “unknown” master record
+- Impact: Downstream reports should disclose unresolved-dimension counts and may show an explicit unknown member.
+
+### 31) Interpret supplied Finance week labels as period starts and treat the report as a non-authoritative benchmark
+- Date: 2026-10-27
+- Decision: Treat each supplied `week_ending` value as the start of a seven-day half-open bucket for the comparison, and label all results with the original Finance week date.
+- Context: The CSV dates are Wednesdays exactly seven days apart and the generator creates them from `DAYSTR[::7]`, so the column label “week_ending” does not describe the observed boundary.
+- Alternatives considered:
+  - Assume a conventional Sunday week end
+  - Shift labels to a different weekday without source evidence
+- Impact: Comparison windows are reproducible and the source label is retained; the interpretation is documented as a data-layout assumption.
+
+### 32) Do not claim exact Finance reconciliation from independently generated report values
+- Date: 2026-10-27
+- Decision: Report event-date, ingest-date, and duplicate-inclusive POS counterfactuals, but do not claim they explain or reproduce the Finance numbers.
+- Context: The generator comments assert ingest-date grouping and missing deduplication, but its actual Finance CSV writer populates gross sales, units, and baskets using independent random draws rather than source aggregates. The report also lacks a gross-sales definition for tax/discount treatment.
+- Alternatives considered:
+  - Treat the comment as proof that the emitted Finance values were calculated from POS
+  - Tune an undocumented reconciliation until random values appear closer
+- Impact: The published report remains a comparison benchmark; a true variance explanation requires the original Finance aggregation logic or a corrected report.
+
 ---
 
 ## Current status
 
-The project has completed Phase 4: curated fact tables.
+The project has completed Phase 5: reconciled POS sales and Finance comparison.
 
 The following artifacts are already in place:
 - [README.md](./README.md)
@@ -276,8 +332,14 @@ The following artifacts are already in place:
 - [pipeline/validate_manifest.py](./pipeline/validate_manifest.py)
 - [pipeline/build_dimensions.py](./pipeline/build_dimensions.py)
 - [pipeline/build_facts.py](./pipeline/build_facts.py)
+- [pipeline/build_sales.py](./pipeline/build_sales.py)
+- [sql/05_reconciliation/fact_reconciled_sales.sql](./sql/05_reconciliation/fact_reconciled_sales.sql)
+- [sql/05_reconciliation/sales_reconciliation_finance.sql](./sql/05_reconciliation/sales_reconciliation_finance.sql)
+- [docs/sales_reconciliation_findings.md](./docs/sales_reconciliation_findings.md)
 - [tests/test_build_dimensions.py](./tests/test_build_dimensions.py)
+- [tests/test_sales_reconciliation.py](./tests/test_sales_reconciliation.py)
 - [curated/facts/build_summary.json](./curated/facts/build_summary.json) (generated locally; not tracked)
+- [curated/sales/build_summary.json](./curated/sales/build_summary.json) (generated locally; not tracked)
 - [docs/raw_profile.json](./docs/raw_profile.json)
 - [docs/manifest_validation.json](./docs/manifest_validation.json)
 

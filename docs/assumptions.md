@@ -81,3 +81,12 @@ Any metric or dimension that relies on undocumented fields or assumptions must b
 - The feed does not provide a carrier identifier or a reliable trip identifier. Neither is manufactured in the timestamp-grain telemetry fact.
 - The fiscal date dimension ends at 2026-06-30; telemetry readings whose corrected local date is 2026-07-01 retain a null `date_key` instead of receiving a fabricated fiscal date.
 - The POS captured channel is preserved alongside effective-dated ERP channel history. A mismatch is flagged, not overwritten, because the two sources can disagree.
+
+## Phase 5 sales definition and reconciliation
+
+- The POS transaction line is the canonical sales grain. The assignment has no reliable POS-to-ERP order key and no invoice fact; ERP order headers are retained as a separate non-additive comparator, not added to POS sales.
+- `gross_sales_ex_tax_inr` is quantity times POS unit price before discount; `net_sales_ex_tax_inr` subtracts line discount. Tax is separate because the POS contract says unit price is tax-exclusive.
+- For channel attribution, use the POS channel captured on each line. Keep ERP channel history separately as a diagnostic; do not overwrite either source.
+- Retain POS lines with unresolved outlet/product/channel dimensions and flag them, avoiding unreviewed exclusions from sales totals.
+- Finance report `week_ending` values are Wednesdays spaced seven days apart, generated from `DAYSTR[::7]`. The supplied label is treated as the start of a seven-day half-open comparison period. The source does not define whether gross sales include tax or discounts.
+- The generator comments say Finance groups by ingest date and does not deduplicate, but the code that writes the Finance CSV uses independent random gross/unit/basket values instead of aggregating source records. Event-date, ingest-date, and duplicate-inclusive comparisons are diagnostic counterfactuals, not an exact reproduction of the published report.

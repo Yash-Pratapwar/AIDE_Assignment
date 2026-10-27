@@ -71,6 +71,22 @@ The default output is `curated\facts\` and is excluded from source control. It c
 
 Every fact includes the raw file path and row number for lineage. Exact duplicate POS and telemetry payloads are collapsed with duplicate counts retained; conflicting rows with the same business identifier remain present and are flagged. The order-header fact is at CDC event-version grain, ordered by source sequence, retaining the current-version flag and delete tombstones. Telemetry readings use normalized Celsius and corrected timestamps for the documented firmware clock offset. The corrupt telemetry file is excluded and listed in the build summary.
 
+## Phase 5: build and compare sales
+
+After building the Phase 3 dimensions and Phase 4 facts:
+
+```powershell
+python pipeline\build_sales.py --root "D:\path\to\assignment-pack\data"
+```
+
+Outputs are written to the ignored `curated\sales\` directory:
+
+- `fact_reconciled_sales.parquet` — POS line-grain sales, with gross value before discount and tax, net value after discount but before tax, source lineage, and dimension-resolution flags.
+- `sales_reconciliation_finance.parquet` — Finance report comparisons by supplied week label and channel. It includes local sale/event-date totals, ingest-date totals, an ingest-date duplicate-inclusive counterfactual, and separate ERP order-header evidence.
+- `build_summary.json` — totals and coverage/variance counts.
+
+The reusable SQL is in `sql\05_reconciliation\`. A critical limitation is documented in `docs\sales_reconciliation_findings.md`: although the generator comments describe legacy ingest-date and duplicate-counting defects, its Finance CSV values are generated independently at random rather than aggregated from source feeds. The report can be compared but cannot be numerically reconciled to source rows or used to prove those defects.
+
 ## Setup
 
 Use Python 3.10 or later. Install the project dependencies:
@@ -85,6 +101,8 @@ python -m pip install -r requirements.txt
 - `pipeline/validate_manifest.py` compares manifest counts to the raw POS, telemetry, and WMS partitions, and flags unreadable files.
 - `pipeline/build_dimensions.py` builds the Phase 3 Parquet dimensions and reference tables.
 - `pipeline/build_facts.py` builds the four Phase 4 facts and records duplicate handling and excluded source files.
+- `pipeline/build_sales.py` builds the POS-led reconciled sales fact and Finance comparison.
+- `sql/05_reconciliation/` contains the Phase 5 sales and reconciliation SQL.
 - `docs/assumptions.md` captures source-contract risks and initial project assumptions.
 - `DECISIONS.md` is the project decision ledger.
 - `docs/raw_profile.json` is generated profiling metadata; it contains no source records.
