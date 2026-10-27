@@ -3,23 +3,14 @@
   "manifest_path": "D:\\Downloads\\AIDE Take-home Assignment\\AIDE_Assignment_Pack_docs_and_generator_v1\\data\\_manifest\\expected_partitions.csv",
   "summary": {
     "expected_partitions": 1638,
-    "actual_partitions": 1641,
-    "missing_in_manifest": 3,
+    "actual_partitions": 1638,
+    "missing_in_manifest": 0,
     "missing_in_actual": 0,
+    "unmanifested_raw_feed_directory_count": 1,
     "partition_mismatches": 1,
     "invalid_file_count": 1
   },
   "feeds": {
-    "erp_cdc": {
-      "manifest_partition_count": 0,
-      "actual_partition_count": 3,
-      "manifest_total_rows": 0,
-      "actual_total_rows": 0,
-      "manifest_total_files": 0,
-      "actual_total_files": 0,
-      "partition_mismatch_count": 0,
-      "invalid_file_count": 0
-    },
     "pos_transactions": {
       "manifest_partition_count": 546,
       "actual_partition_count": 546,
@@ -51,21 +42,18 @@
       "invalid_file_count": 0
     }
   },
-  "missing_in_manifest": [
+  "missing_in_manifest": [],
+  "missing_in_actual": [],
+  "unmanifested_raw_feed_directories": [
     {
-      "feed": "erp_cdc",
-      "partition": "outlet_master"
-    },
-    {
-      "feed": "erp_cdc",
-      "partition": "product_master"
-    },
-    {
-      "feed": "erp_cdc",
-      "partition": "sales_order_header"
+      "directory": "erp_cdc",
+      "subdirectories": [
+        "outlet_master",
+        "product_master",
+        "sales_order_header"
+      ]
     }
   ],
-  "missing_in_actual": [],
   "partition_mismatches": [
     {
       "feed": "reefer_telemetry",

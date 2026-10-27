@@ -1,5 +1,6 @@
 # Assignment data must remain outside source control.
 /data/
+/curated/
 *.parquet
 *.csv
 *.jsonl

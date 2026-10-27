@@ -52,3 +52,18 @@ The first technical work is to inventory and profile the raw files so the projec
 ## Guardrail for the project
 
 Any metric or dimension that relies on undocumented fields or assumptions must be explicitly recorded in the project decision log. We will not silently normalize or infer business meaning if the upstream contract is unclear.
+
+## Phase 2 validation findings
+
+- The expected-partitions manifest covers `pos_transactions`, `reefer_telemetry`, and `wms_scan_events`; it does not contain ERP CDC rows.
+- The manifest contains 1,638 expected partitions, all of which have a matching directory in the three covered feeds.
+- One telemetry Parquet file in `dt=2025-07-14` is unreadable. The partition has 7 readable files and 5,779 readable rows versus 8 files and 6,724 rows in the manifest, a 945-row deficit.
+- The malformed file is not repaired or silently dropped. Downstream telemetry metrics must retain this known incompleteness as a quality limitation.
+
+## Phase 3 dimension rules
+
+- The fiscal calendar reference is the authority for fiscal labels; Gregorian date attributes are added without replacing its fiscal definitions.
+- Outlet and product dimensions preserve effective-dated active versions from ERP CDC, ordered by `__op_ts` and then `__seq`. A delete closes the preceding active interval; the deleted state is not represented as an active dimension row.
+- `dim_channel_history` records the initial observed channel and subsequent channel changes. Its intervals span unrelated outlet updates and end on the next channel change or outlet deletion.
+- The UOM conversion reference is authoritative. Missing SKU conversions are kept null and explicitly flagged; `case_pack` is not used as a fallback conversion.
+- Warehouse, carrier, and UOM references are static snapshots because no effective-dated history was supplied.

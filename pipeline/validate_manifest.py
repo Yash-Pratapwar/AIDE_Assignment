@@ -111,11 +111,14 @@ def load_manifest(manifest_path: Path) -> List[Dict[str, Any]]:
 
 
 def validate(raw_root: Path, manifest_path: Path) -> Dict[str, Any]:
+    manifest_rows = load_manifest(manifest_path)
+    manifest_feeds = {row["feed"] for row in manifest_rows}
     actual_partitions: List[Dict[str, Any]] = []
     for feed_name, part_dir in iter_partition_dirs(raw_root):
+        if feed_name not in manifest_feeds:
+            continue
         actual_partitions.append(summarize_partition(feed_name, part_dir))
 
-    manifest_rows = load_manifest(manifest_path)
     manifest_index = {(r["feed"], r["partition"]): r for r in manifest_rows}
     actual_index = {(r["feed"], r["partition"]): r for r in actual_partitions}
 
@@ -149,6 +152,15 @@ def validate(raw_root: Path, manifest_path: Path) -> Dict[str, Any]:
         for item in part["invalid_files"]
     ]
 
+    unmanifested_raw_feed_directories = [
+        {
+            "directory": feed_dir.name,
+            "subdirectories": sorted(path.name for path in feed_dir.iterdir() if path.is_dir()),
+        }
+        for feed_dir in sorted(p for p in raw_root.iterdir() if p.is_dir())
+        if feed_dir.name not in manifest_feeds
+    ]
+
     by_feed: Dict[str, Dict[str, Any]] = {}
     for feed_name in sorted(set(r["feed"] for r in manifest_rows) | set(r["feed"] for r in actual_partitions)):
         manifest_total_rows = sum(r["row_count"] for r in manifest_rows if r["feed"] == feed_name)
@@ -174,6 +186,7 @@ def validate(raw_root: Path, manifest_path: Path) -> Dict[str, Any]:
             "actual_partitions": len(actual_partitions),
             "missing_in_manifest": len(missing_in_manifest),
             "missing_in_actual": len(missing_in_actual),
+            "unmanifested_raw_feed_directory_count": len(unmanifested_raw_feed_directories),
             "partition_mismatches": len(mismatches),
             "invalid_file_count": len(invalid_files),
         },
@@ -184,6 +197,7 @@ def validate(raw_root: Path, manifest_path: Path) -> Dict[str, Any]:
         "missing_in_actual": [
             {"feed": key[0], "partition": key[1]} for key in missing_in_actual
         ],
+        "unmanifested_raw_feed_directories": unmanifested_raw_feed_directories,
         "partition_mismatches": mismatches,
         "invalid_files": invalid_files,
     }
@@ -215,6 +229,7 @@ def main() -> None:
     print(f"- actual partitions: {summary['actual_partitions']}")
     print(f"- missing in manifest: {summary['missing_in_manifest']}")
     print(f"- missing in actual: {summary['missing_in_actual']}")
+    print(f"- raw feed directories outside manifest scope: {summary['unmanifested_raw_feed_directory_count']}")
     print(f"- partition mismatches: {summary['partition_mismatches']}")
     print(f"- invalid parquet files: {summary['invalid_file_count']}")
 

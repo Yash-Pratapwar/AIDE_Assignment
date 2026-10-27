@@ -132,18 +132,74 @@ Whenever a decision is revised, capture the new decision and the reason for the 
 
 ### 13) Manifest structure for ERP CDC needs a careful interpretation
 - Date: 2026-10-27
-- Decision: The ERP manifest is not directly comparable to the raw file layout because ERP CDC is partitioned by source table (`outlet_master`, `product_master`, `sales_order_header`) rather than a single feed-level partition date list.
-- Context: The validation script shows three ERP CDC subdirectories as "missing in manifest" when compared at the wrong level; this is a reporting issue, not necessarily a raw data failure.
+- Decision: ERP CDC is not covered by the supplied expected-partitions manifest; it is organized into source-table directories (`outlet_master`, `product_master`, `sales_order_header`).
+- Context: The manifest feed values contain only POS, telemetry, and WMS. The earlier validator incorrectly compared ERP table directories to manifest partitions.
 - Alternatives considered:
-  - Treat the ERP subdirectories as missing files
-  - Assume the manifest is invalid without checking the source-table structure
-- Impact: Phase 3 should normalize the ERP CDC source structure before writing any point-in-time dimensions.
+  - Report ERP source-table directories as missing manifest partitions
+  - Silently claim ERP CDC has been validated by the manifest
+- Impact: ERP CDC must be checked for readable Parquet files and valid CDC operations independently of the manifest.
+
+### 14) Correct the Phase 2 validator's manifest scope
+- Date: 2026-10-27
+- Decision: Compare actual partitions only for feeds represented in the manifest, and report unmanifested raw feed directories separately.
+- Context: The first report counted the three ERP CDC table directories as extra partitions, producing a misleading actual-partition count of 1,641. The corrected report compares 1,638 manifest partitions against 1,638 actual manifest-scoped partitions.
+- Alternatives considered:
+  - Keep the misleading count and describe it as an ERP partition mismatch
+  - Remove ERP CDC discovery without disclosing its manifest coverage gap
+- Impact: Phase 2 findings now distinguish manifest coverage from the separate ERP CDC source-table layout.
+
+## Phase 3 decisions
+
+### 15) Use the supplied fiscal calendar as the authority for fiscal attributes
+- Date: 2026-10-27
+- Decision: Enrich the supplied fiscal calendar with Gregorian date fields, but do not recalculate or replace its fiscal year, quarter, fiscal month, or ISO week values.
+- Context: Fiscal periods are business-defined and already supplied; rebuilding them would introduce an unnecessary competing definition.
+- Alternatives considered:
+  - Derive fiscal periods independently from calendar dates
+  - Keep only the supplied fields and omit useful date attributes
+- Impact: All downstream date joins should use `date_key` or `calendar_date` from `dim_date`.
+
+### 16) Build outlet and product dimensions as effective-dated CDC histories
+- Date: 2026-10-27
+- Decision: Order CDC history by `__op_ts` and then `__seq`, collapse same-key/same-timestamp ties to the highest sequence, and emit active insert/update states with half-open effective intervals; delete events close the preceding active interval.
+- Context: The data generator documents out-of-order extract arrival and same-timestamp CDC ties. Latest file arrival is not a valid state-resolution rule.
+- Alternatives considered:
+  - Resolve current state by latest extract date
+  - Keep only one current row per business key
+- Impact: Historical outlet/product attributes remain queryable. Deleted keys have no active row after the deletion timestamp.
+
+### 17) Track channel history only at channel boundaries
+- Date: 2026-10-27
+- Decision: Include the initial observed channel and create later channel-history rows only when the channel value changes. Intervals span unrelated outlet attribute updates and close at the next channel change or outlet deletion.
+- Context: Outlet CDC updates multiple attributes, but users need an accurate answer to the channel-as-of-date question without artificial gaps.
+- Alternatives considered:
+  - Mirror every outlet dimension version into channel history
+  - Keep only each outlet's current channel
+- Impact: `dim_channel_history` is a compact, effective-dated lookup for historical classification.
+
+### 18) Do not infer missing UOM conversions from product case pack
+- Date: 2026-10-27
+- Decision: The supplied UOM conversion reference is authoritative. Missing conversions remain null and are marked with `uom_conversion_available = false`; product `case_pack` is retained as a separate master attribute.
+- Context: The conversion reference intentionally omits some SKUs, and treating case pack as an equivalent conversion without validation would conceal the data gap.
+- Alternatives considered:
+  - Infer eaches-per-case from product case pack
+  - Drop products without a conversion
+- Impact: Downstream unit metrics must explicitly handle the flagged missing conversions.
+
+### 19) Treat warehouse, carrier, and UOM references as static snapshots
+- Date: 2026-10-27
+- Decision: Load the supplied warehouse and carrier master files as static dimensions and attach the static UOM mapping to product versions.
+- Context: No effective-dated history was provided for these references.
+- Alternatives considered:
+  - Invent effective dates for reference changes
+  - Omit these reference tables
+- Impact: Historical changes to these attributes cannot be reconstructed until source history is supplied.
 
 ---
 
 ## Current status
 
-The project is currently in Phase 2: raw validation and manifest checks.
+The project has completed Phase 3: canonical dimensions and reference tables.
 
 The following artifacts are already in place:
 - [README.md](./README.md)
@@ -151,6 +207,8 @@ The following artifacts are already in place:
 - [docs/assumptions.md](./docs/assumptions.md)
 - [pipeline/profile_raw.py](./pipeline/profile_raw.py)
 - [pipeline/validate_manifest.py](./pipeline/validate_manifest.py)
+- [pipeline/build_dimensions.py](./pipeline/build_dimensions.py)
+- [tests/test_build_dimensions.py](./tests/test_build_dimensions.py)
 - [docs/raw_profile.json](./docs/raw_profile.json)
 - [docs/manifest_validation.json](./docs/manifest_validation.json)
 
