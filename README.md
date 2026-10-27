@@ -53,6 +53,24 @@ The default output is `curated\dimensions\` and is intentionally excluded from s
 
 Outlet and product histories are ordered by CDC operation timestamp and sequence, with source-file lineage retained. Delete events close the previous active interval. The channel history only creates a new interval when channel classification changes. Missing UOM conversions remain null and are flagged; they are not inferred from product case-pack values.
 
+## Phase 4: build curated facts
+
+After building the Phase 3 dimensions, build the four row-level facts:
+
+```powershell
+python pipeline\build_facts.py --root "D:\path\to\assignment-pack\data"
+```
+
+The default output is `curated\facts\` and is excluded from source control. It contains:
+
+- `fact_pos_transactions.parquet`
+- `fact_sales_order_headers.parquet`
+- `fact_wms_scan_events.parquet`
+- `fact_reefer_telemetry.parquet`
+- `build_summary.json`
+
+Every fact includes the raw file path and row number for lineage. Exact duplicate POS and telemetry payloads are collapsed with duplicate counts retained; conflicting rows with the same business identifier remain present and are flagged. The order-header fact is at CDC event-version grain, ordered by source sequence, retaining the current-version flag and delete tombstones. Telemetry readings use normalized Celsius and corrected timestamps for the documented firmware clock offset. The corrupt telemetry file is excluded and listed in the build summary.
+
 ## Setup
 
 Use Python 3.10 or later. Install the project dependencies:
@@ -66,6 +84,7 @@ python -m pip install -r requirements.txt
 - `pipeline/profile_raw.py` inventories Parquet feeds, partitions, file counts, row counts, and representative schemas.
 - `pipeline/validate_manifest.py` compares manifest counts to the raw POS, telemetry, and WMS partitions, and flags unreadable files.
 - `pipeline/build_dimensions.py` builds the Phase 3 Parquet dimensions and reference tables.
+- `pipeline/build_facts.py` builds the four Phase 4 facts and records duplicate handling and excluded source files.
 - `docs/assumptions.md` captures source-contract risks and initial project assumptions.
 - `DECISIONS.md` is the project decision ledger.
 - `docs/raw_profile.json` is generated profiling metadata; it contains no source records.

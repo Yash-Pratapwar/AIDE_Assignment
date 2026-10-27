@@ -67,3 +67,17 @@ Any metric or dimension that relies on undocumented fields or assumptions must b
 - `dim_channel_history` records the initial observed channel and subsequent channel changes. Its intervals span unrelated outlet updates and end on the next channel change or outlet deletion.
 - The UOM conversion reference is authoritative. Missing SKU conversions are kept null and explicitly flagged; `case_pack` is not used as a fallback conversion.
 - Warehouse, carrier, and UOM references are static snapshots because no effective-dated history was supplied.
+
+## Phase 4 fact rules
+
+- POS uses the event timestamp as UTC and derives the business timestamp/date in `Asia/Kolkata`. Both `qty` and the post-drift `quantity_units` field map to the canonical quantity.
+- POS, WMS, telemetry, and order-header rows retain source file path and source row number. Exact duplicate rows are collapsed only in POS and telemetry, with the removed-duplicate count retained on the surviving fact row. Conflicting records with the same business key are preserved and flagged.
+- POS eaches are calculated directly for `EA`, and `CS` quantities use the supplied SKU conversion. Missing UOM is not imputed; a case quantity without a conversion remains unconverted.
+- The order-header fact is CDC event-version grain. It retains all insert/update/delete events, orders versions by source sequence, marks the latest event per order, and flags latest delete tombstones. `PARTNER_API` values are flagged but not adjusted.
+- Order-header delete rows reuse the insert's `__op_ts` while their extract partition and `__seq` are later. Therefore source sequence, not operation timestamp, determines latest order state; backwards operation timestamps are retained and flagged.
+- WMS `event_ts` is interpreted in the static warehouse timezone; both source-local and UTC timestamps are retained.
+- Telemetry Fahrenheit is converted to Celsius. A missing unit is inferred from the documented vendor convention only. Firmware `2.1.4` timestamps are shifted back seven hours based on the generator's explicit defect description.
+- The unreadable telemetry Parquet file in `dt=2025-07-14` is excluded from the fact build and listed in its build summary. This fact is incomplete by at least the already observed 945-row manifest shortfall; raw data remains unchanged.
+- The feed does not provide a carrier identifier or a reliable trip identifier. Neither is manufactured in the timestamp-grain telemetry fact.
+- The fiscal date dimension ends at 2026-06-30; telemetry readings whose corrected local date is 2026-07-01 retain a null `date_key` instead of receiving a fabricated fiscal date.
+- The POS captured channel is preserved alongside effective-dated ERP channel history. A mismatch is flagged, not overwritten, because the two sources can disagree.

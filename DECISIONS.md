@@ -195,11 +195,78 @@ Whenever a decision is revised, capture the new decision and the reason for the 
   - Omit these reference tables
 - Impact: Historical changes to these attributes cannot be reconstructed until source history is supplied.
 
+## Phase 4 decisions
+
+### 20) Build order headers at CDC event-version grain
+- Date: 2026-10-27
+- Decision: Preserve every distinct order-header CDC version in `fact_sales_order_headers`, order versions by source sequence, mark the latest version per order, and retain delete tombstones with explicit flags.
+- Context: The ERP feed contains order lifecycle updates and later hard deletes. Inspection showed delete rows reuse the insert's operation timestamp while carrying a later sequence and extract date; timestamp-only ordering misclassified all 2,880 delete rows as non-current.
+- Alternatives considered:
+  - Keep only current order headers
+  - Drop delete events and their tombstone evidence
+- Impact: Current-order analyses must filter on `is_latest_version` and exclude `is_deleted_current_order` where appropriate. Backwards operation timestamps are flagged for review.
+
+### 21) Collapse only exact POS and telemetry duplicates
+- Date: 2026-10-27
+- Decision: Remove exact duplicate payloads from POS and telemetry facts, retain the number removed on each surviving row, and preserve/flag conflicting rows that share a business identifier.
+- Context: At-least-once delivery is documented for POS and telemetry; data inspection found 84,000 duplicated POS key occurrences and exact payloads are the safe deduplication target.
+- Alternatives considered:
+  - Keep all duplicate deliveries in the analytical facts
+  - Drop every repeated identifier, even when payload values conflict
+- Impact: Fact row counts exclude exact retransmissions while traceability and ambiguity remain visible.
+
+### 22) Normalize POS quantities and dates without inferring missing UOM
+- Date: 2026-10-27
+- Decision: Map both `qty` and the schema-drift field `quantity_units` to canonical quantity; convert event timestamps from UTC to `Asia/Kolkata`; calculate eaches only for recognized base units or supplied case conversions.
+- Context: The POS schema changes across the feed and the pre-drift schema omits UOM. Inventing an unknown unit would make physical quantity totals unreliable.
+- Alternatives considered:
+  - Use ingest date as sale date
+  - Assume missing UOM means eaches
+  - Drop pre-drift records
+- Impact: Pre-drift rows remain available with raw quantity but no derived eaches when the unit is unknown.
+
+### 23) Normalize known telemetry conventions and expose incomplete source coverage
+- Date: 2026-10-27
+- Decision: Convert Fahrenheit to Celsius, infer null units only from the documented vendor convention, and correct the documented firmware `2.1.4` clock offset by seven hours. Exclude unreadable Parquet files from the fact only when explicitly listed in the build summary.
+- Context: The generator explicitly describes these source defects; one telemetry file is unreadable and the prior manifest check measured a 945-row deficit for its partition.
+- Alternatives considered:
+  - Leave mixed units and known offset unnormalized
+  - Silently ignore the corrupt file
+  - Stop the entire fact build because of one corrupt partition
+- Impact: Readable telemetry is queryable in normalized form, and the known incompleteness remains explicit for downstream metrics.
+
+### 24) Treat WMS event timestamps as warehouse-local time
+- Date: 2026-10-27
+- Decision: Preserve the original WMS local timestamp and derive UTC using the warehouse timezone reference.
+- Context: The feed contract says WMS `event_ts` is site local and the supplied warehouse reference provides timezone.
+- Alternatives considered:
+  - Interpret all WMS timestamps as UTC
+  - Keep only the raw timestamp string
+- Impact: Downstream cycle-time work can use consistent instants while retaining the source-local representation.
+
+### 25) Do not invent telemetry trip or carrier keys
+- Date: 2026-10-27
+- Decision: Keep telemetry at timestamp-reading grain and do not infer a trip boundary or assign a carrier where the source provides no trip or carrier identifier.
+- Context: Telemetry supplies device, vehicle, route, warehouse, and timestamp, but no authoritative trip ID or carrier ID.
+- Alternatives considered:
+  - Create trip groups from an arbitrary time gap or route/date combination
+  - Guess carrier from route or vehicle
+- Impact: Trip-level and carrier-level metrics require a separately agreed derivation or new source mapping.
+
+### 26) Preserve both POS and ERP outlet-channel evidence
+- Date: 2026-10-27
+- Decision: Retain the POS captured channel and the channel-history value effective at sale time as separate fields, and flag mismatches rather than selecting one silently.
+- Context: The built fact identifies 1,923,702 POS rows where the captured channel differs from the effective-dated ERP channel or the channel history is unavailable. The assignment describes channel changes and possible cross-system comparability issues.
+- Alternatives considered:
+  - Overwrite the POS value with ERP history
+  - Treat the POS value as canonical and discard ERP history
+- Impact: Phase 5 reconciliation must choose/document which channel definition supports each business question.
+
 ---
 
 ## Current status
 
-The project has completed Phase 3: canonical dimensions and reference tables.
+The project has completed Phase 4: curated fact tables.
 
 The following artifacts are already in place:
 - [README.md](./README.md)
@@ -208,7 +275,9 @@ The following artifacts are already in place:
 - [pipeline/profile_raw.py](./pipeline/profile_raw.py)
 - [pipeline/validate_manifest.py](./pipeline/validate_manifest.py)
 - [pipeline/build_dimensions.py](./pipeline/build_dimensions.py)
+- [pipeline/build_facts.py](./pipeline/build_facts.py)
 - [tests/test_build_dimensions.py](./tests/test_build_dimensions.py)
+- [curated/facts/build_summary.json](./curated/facts/build_summary.json) (generated locally; not tracked)
 - [docs/raw_profile.json](./docs/raw_profile.json)
 - [docs/manifest_validation.json](./docs/manifest_validation.json)
 
