@@ -1,0 +1,87 @@
+{
+  "raw_root": "D:\\Downloads\\AIDE Take-home Assignment\\AIDE_Assignment_Pack_docs_and_generator_v1\\data\\raw",
+  "manifest_path": "D:\\Downloads\\AIDE Take-home Assignment\\AIDE_Assignment_Pack_docs_and_generator_v1\\data\\_manifest\\expected_partitions.csv",
+  "summary": {
+    "expected_partitions": 1638,
+    "actual_partitions": 1641,
+    "missing_in_manifest": 3,
+    "missing_in_actual": 0,
+    "partition_mismatches": 1,
+    "invalid_file_count": 1
+  },
+  "feeds": {
+    "erp_cdc": {
+      "manifest_partition_count": 0,
+      "actual_partition_count": 3,
+      "manifest_total_rows": 0,
+      "actual_total_rows": 0,
+      "manifest_total_files": 0,
+      "actual_total_files": 0,
+      "partition_mismatch_count": 0,
+      "invalid_file_count": 0
+    },
+    "pos_transactions": {
+      "manifest_partition_count": 546,
+      "actual_partition_count": 546,
+      "manifest_total_rows": 4084000,
+      "actual_total_rows": 4084000,
+      "manifest_total_files": 4368,
+      "actual_total_files": 4368,
+      "partition_mismatch_count": 0,
+      "invalid_file_count": 0
+    },
+    "reefer_telemetry": {
+      "manifest_partition_count": 546,
+      "actual_partition_count": 546,
+      "manifest_total_rows": 3714871,
+      "actual_total_rows": 3713926,
+      "manifest_total_files": 4368,
+      "actual_total_files": 4367,
+      "partition_mismatch_count": 1,
+      "invalid_file_count": 1
+    },
+    "wms_scan_events": {
+      "manifest_partition_count": 546,
+      "actual_partition_count": 546,
+      "manifest_total_rows": 1496000,
+      "actual_total_rows": 1496000,
+      "manifest_total_files": 2184,
+      "actual_total_files": 2184,
+      "partition_mismatch_count": 0,
+      "invalid_file_count": 0
+    }
+  },
+  "missing_in_manifest": [
+    {
+      "feed": "erp_cdc",
+      "partition": "outlet_master"
+    },
+    {
+      "feed": "erp_cdc",
+      "partition": "product_master"
+    },
+    {
+      "feed": "erp_cdc",
+      "partition": "sales_order_header"
+    }
+  ],
+  "missing_in_actual": [],
+  "partition_mismatches": [
+    {
+      "feed": "reefer_telemetry",
+      "partition": "dt=2025-07-14",
+      "expected_file_count": 8,
+      "actual_file_count": 7,
+      "expected_row_count": 6724,
+      "actual_row_count": 5779
+    }
+  ],
+  "invalid_files": [
+    {
+      "feed": "reefer_telemetry",
+      "partition": "dt=2025-07-14",
+      "file": "reefer_telemetry\\dt=2025-07-14\\part-00000.parquet",
+      "error": "ArrowInvalid: Parquet magic bytes not found in footer. Either the file is corrupted or this is not a parquet file."
+    }
+  ]
+}
