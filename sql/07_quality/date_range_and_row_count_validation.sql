@@ -1,4 +1,9 @@
-WITH feed_ranges AS (
+WITH expected_bounds AS (
+    SELECT min(calendar_date) AS expected_min_date,
+           max(calendar_date) AS expected_max_date
+    FROM dim_date
+),
+feed_ranges AS (
     SELECT 'fact_pos_transactions' AS feed_name,
            count(*) AS row_count,
            min(sale_date) AS min_date,
@@ -29,6 +34,16 @@ WITH feed_ranges AS (
            max(order_date) AS max_date
     FROM fact_sales_order_headers
 )
-SELECT *
+SELECT
+    feed_ranges.*,
+    expected_bounds.expected_min_date,
+    expected_bounds.expected_max_date,
+    CASE
+        WHEN feed_ranges.min_date < expected_bounds.expected_min_date
+          OR feed_ranges.max_date > expected_bounds.expected_max_date
+            THEN 'outside_expected_range'
+        ELSE 'within_expected_range'
+    END AS date_range_status
 FROM feed_ranges
+CROSS JOIN expected_bounds
 ORDER BY feed_name

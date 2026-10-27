@@ -17,7 +17,7 @@ WITH feed_duplicates AS (
         UNION ALL
 
         SELECT duplicate_rows_removed FROM fact_sales_order_headers
-        WHERE has_exact_duplicates OR duplicate_rows_removed > 0
+        WHERE duplicate_rows_removed > 0
     ) d
 ),
 scan_issues AS (
@@ -55,6 +55,30 @@ incomplete_dimensions AS (
         UNION ALL
         SELECT sku_code FROM dim_product WHERE sku_code IS NULL OR product_name IS NULL OR category IS NULL
     ) d
+),
+date_range_issues AS (
+    WITH expected_bounds AS (
+        SELECT min(calendar_date) AS expected_min_date,
+               max(calendar_date) AS expected_max_date
+        FROM dim_date
+    ),
+    feed_ranges AS (
+        SELECT min(sale_date) AS min_date, max(sale_date) AS max_date
+        FROM fact_pos_transactions
+        UNION ALL
+        SELECT min(reading_date), max(reading_date)
+        FROM fact_reefer_telemetry
+        UNION ALL
+        SELECT min(event_date), max(event_date)
+        FROM fact_wms_scan_events
+        UNION ALL
+        SELECT min(order_date), max(order_date)
+        FROM fact_sales_order_headers
+    )
+    SELECT count(*) AS out_of_range_feed_count
+    FROM feed_ranges
+    CROSS JOIN expected_bounds
+    WHERE min_date < expected_min_date OR max_date > expected_max_date
 )
 SELECT
     'duplicate_rows_removed' AS metric_name,
@@ -71,4 +95,13 @@ UNION ALL
 SELECT
     'incomplete_reference_rows' AS metric_name,
     coalesce((SELECT incomplete_reference_rows FROM incomplete_dimensions), 0) AS metric_value
+UNION ALL
+SELECT
+    'manifest_partition_issues' AS metric_name,
+    count(*) AS metric_value
+FROM manifest_partition_issues
+UNION ALL
+SELECT
+    'out_of_range_feeds' AS metric_name,
+    coalesce((SELECT out_of_range_feed_count FROM date_range_issues), 0) AS metric_value
 ORDER BY metric_name

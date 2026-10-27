@@ -138,16 +138,6 @@ def load_manifest_issues(report_path: Path) -> list[tuple[Any, ...]]:
     return issues
 
 
-def create_empty_view(
-    connection: duckdb.DuckDBPyConnection,
-    view_name: str,
-    columns: str,
-) -> None:
-    connection.execute(
-        f"CREATE VIEW {view_name} AS SELECT {columns} WHERE FALSE"
-    )
-
-
 def build_quality(
     data_root: Path,
     dimensions_root: Path,
@@ -163,25 +153,6 @@ def build_quality(
 
         for view_name, (folder, table_name) in TABLES.items():
             source_path = roots[folder] / f"{table_name}.parquet"
-            if not source_path.is_file():
-                if view_name == "dim_warehouse":
-                    create_empty_view(connection, view_name, "CAST(NULL AS VARCHAR) AS warehouse_code, CAST(NULL AS VARCHAR) AS warehouse_name, CAST(NULL AS VARCHAR) AS city, CAST(NULL AS VARCHAR) AS region_name")
-                elif view_name == "dim_outlet":
-                    create_empty_view(connection, view_name, "CAST(NULL AS VARCHAR) AS outlet_code, CAST(NULL AS VARCHAR) AS outlet_name, CAST(NULL AS VARCHAR) AS city, CAST(NULL AS VARCHAR) AS channel")
-                elif view_name == "dim_product":
-                    create_empty_view(connection, view_name, "CAST(NULL AS VARCHAR) AS sku_code, CAST(NULL AS VARCHAR) AS product_name, CAST(NULL AS VARCHAR) AS category, CAST(NULL AS VARCHAR) AS brand")
-                elif view_name == "dim_carrier":
-                    create_empty_view(connection, view_name, "CAST(NULL AS VARCHAR) AS carrier_id, CAST(NULL AS VARCHAR) AS carrier_name, CAST(NULL AS VARCHAR) AS mode, CAST(NULL AS BIGINT) AS sla_hours")
-                elif view_name == "dim_date":
-                    create_empty_view(connection, view_name, "CAST(NULL AS DATE) AS calendar_date")
-                else:
-                    create_empty_view(
-                        connection,
-                        view_name,
-                        "CAST(NULL AS VARCHAR) AS placeholder",
-                    )
-                continue
-
             connection.execute(
                 f"CREATE VIEW {view_name} AS "
                 f"SELECT * FROM read_parquet({sql_literal(str(source_path))})"
@@ -247,14 +218,40 @@ def build_quality(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Phase 7 quality SQL library")
     parser.add_argument("--root", default=None, help="Folder containing raw/, reference/, and curated outputs")
+    parser.add_argument(
+        "--dimensions",
+        default=str(PROJECT_ROOT / "curated" / "dimensions"),
+        help="Directory containing Phase 3 dimension Parquet files.",
+    )
+    parser.add_argument(
+        "--facts",
+        default=str(PROJECT_ROOT / "curated" / "facts"),
+        help="Directory containing Phase 4 fact Parquet files.",
+    )
+    parser.add_argument(
+        "--validation-report",
+        default=str(PROJECT_ROOT / "docs" / "manifest_validation.json"),
+        help="Phase 2 manifest-validation JSON report.",
+    )
+    parser.add_argument(
+        "--output",
+        default=str(PROJECT_ROOT / "curated" / "quality"),
+        help="Output directory for Phase 7 quality tables.",
+    )
     args = parser.parse_args()
 
     data_root = find_data_root(args.root)
-    dimensions_root = data_root / "curated" / "dimensions"
-    facts_root = data_root / "curated" / "facts"
-    output_root = data_root / "curated" / "quality"
-    validation_report = data_root / "docs" / "manifest_validation.json"
-    build_quality(data_root, dimensions_root, facts_root, output_root, validation_report)
+    summary = build_quality(
+        data_root,
+        Path(args.dimensions).resolve(),
+        Path(args.facts).resolve(),
+        Path(args.output).resolve(),
+        Path(args.validation_report).resolve(),
+    )
+    print("Built Phase 7 quality outputs:")
+    for name, result in summary["queries"].items():
+        print(f"- {name}: {result['rows']:,} rows")
+    print(f"- summary: {Path(summary['output_directory']) / 'build_summary.json'}")
 
 
 if __name__ == "__main__":

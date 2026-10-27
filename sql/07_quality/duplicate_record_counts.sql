@@ -27,7 +27,7 @@ WITH feed_duplicate_totals AS (
            count(*) AS rows_flagged,
            coalesce(sum(duplicate_rows_removed), 0) AS duplicate_rows_removed
     FROM fact_sales_order_headers
-    WHERE has_exact_duplicates OR duplicate_rows_removed > 0
+    WHERE duplicate_rows_removed > 0
 )
 SELECT
     feed_name,

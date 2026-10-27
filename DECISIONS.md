@@ -377,32 +377,153 @@ Whenever a decision is revised, capture the new decision and the reason for the 
   - Treat all source-system values as directly comparable
 - Impact: The query is descriptive diagnostic evidence; a reconciliation requires an approved valuation rule.
 
+## Phase 7 decisions
+
+### 39) Treat operational quality checks as a required guardrail for any KPI interpretation
+- Date: 2026-10-28
+- Decision: Phase 7 is not optional reporting hygiene. The project must surface duplicate counts, telemetry anomalies, missing WMS stage transitions, date-range drift, and incomplete reference rows before a KPI can be treated as dependable.
+- Context: The assignment explicitly states that the ask-anything capability requires knowing whether the feed is trustworthy and what is missing. A KPI without a quality story is not ready for decision-making.
+- Alternatives considered:
+  - Skip explicit quality checks and rely on aggregate KPI outputs alone
+  - Add quality checks only after all metrics are complete
+- Impact: Business users can distinguish a number from a trusted number, and suspected data issues are preserved in the analytical layer.
+
+### 40) Keep duplicate and anomaly logic tied to the raw fact semantics, not to a generic “bad row” bucket
+- Date: 2026-10-28
+- Decision: Duplicate rows are captured per feed and anomaly conditions are reported with their specific type (`temperature_out_of_band`, `missing_temperature`, `unit_unresolved`, `missing_intermediate_stage`, etc.), rather than collapsing them into one catch-all flag.
+- Context: Different feeds have different failure modes. A single generic quality flag would hide the diagnostic value of the check and make a user unable to know what needs attention.
+- Alternatives considered:
+  - One count-only quality score per feed
+  - Silent filtering of anomalous rows without preserving the evidence
+- Impact: Quality outputs remain actionable, auditable, and traceable to underlying rows and source defects.
+
+### 41) Use incomplete reference dimensions as an explicit quality issue, not a hidden fallback
+- Date: 2026-10-28
+- Decision: Missing warehouse, outlet, carrier, and product master rows are surfaced in the quality layer and counted as reference incompleteness rather than being filled with synthetic labels or silently ignored.
+- Context: The data generator confirms that some reference rows can be missing or incomplete, and downstream analytics should never claim a full dimension coverage if the source is incomplete.
+- Alternatives considered:
+  - Auto-fill unknown dimensions
+  - Drop records with missing master references
+- Impact: Data health output tells business users whether metric output is limited by incomplete reference coverage.
+
+### 42) Keep the Phase 7 output distinct from Phase 6 metric outputs
+- Date: 2026-10-28
+- Decision: Quality checks are executed separately in `sql/07_quality/` and written to `curated/quality/`, with dedicated summary metadata. They are not folded into the KPI result tables.
+- Context: The quality layer is meant to answer a different business question: “is this signal trustworthy?” rather than “what is the metric value?”
+- Alternatives considered:
+  - Merge quality and KPI outputs into one table
+  - Store quality data only as ad hoc Python logs
+- Impact: The repository preserves a clean separation between metric logic and operational controls.
+
+## Phase 8 decisions
+
+### 43) Make the final business-definition layer a first-class deliverable
+- Date: 2026-10-28
+- Decision: Implement a single KPI catalogue document that records each metric's definition, grain, filters, source feeds, calculation logic, owner, limitations, and assumptions.
+- Context: The project plan requires a single stakeholder-facing registry and the repository already contains the underlying SQL. The metric layer without a business-definition layer is not fully reviewable.
+- Alternatives considered:
+  - Treat the SQL file names as the catalogue
+  - Keep the README and decisions as the only documentation layer
+- Impact: Business users have a single source of truth for the definition and caveats behind each metric.
+
+### 44) Separate KPI definitions from operational quality alerts
+- Date: 2026-10-28
+- Decision: The catalogue includes both business KPI definitions and the Phase 7 operational quality summary, but keeps them explicitly separated in the documentation and execution structure.
+- Context: KPI values answer “what is the number?”, while quality checks answer “is the number trustworthy?”. Both are important, but they must not be conflated.
+- Alternatives considered:
+  - Fold every quality metric into the KPI catalogue without distinction
+  - Omit quality checks from the final business-definition layer
+- Impact: The repository preserves the distinction between metric output and confidence checks.
+
+### 45) Use business ownership in the catalogue instead of technical ownership only
+- Date: 2026-10-28
+- Decision: Each metric is assigned a business owner or operational owner, such as Finance, Logistics, or Data Quality, instead of only a technical file owner.
+- Context: The assignment specifically asks for ownership metadata and business-context understanding, not just technical documentation.
+- Alternatives considered:
+  - List only data-engineering owners
+  - Omit owner metadata altogether
+- Impact: The catalogue supports stakeholder conversations and review of metric trustworthiness.
+
+### 46) Treat known limitations as part of the metric surface, not as hidden footnotes
+- Date: 2026-10-28
+- Decision: Every metric entry documents its known limitations and assumptions, including source defects, missing data, and proxy logic where a true business KPI is unavailable.
+- Context: Several metrics are explicitly proxy or partial measures, and the project plan requires those caveats to be written down clearly.
+- Alternatives considered:
+  - Only document the happy-path metric logic
+  - Keep limitations in code comments instead of the catalogue
+- Impact: Users can interpret the outputs responsibly and avoid overstating the quality of proxy KPIs.
+
+### 47) Complete the final documentation layer and mark Phase 8 as done
+- Date: 2026-10-28
+- Decision: The repository now includes the final `KPI_CATALOGUE.md` and the infrastructure documentation directly references it; this closes the Phase 8 documentation requirement.
+- Context: The assignment required a complete repo-level analytical foundation with query library, metrics, quality checks, and documentation. The catalogue is now present and the decision log reflects the final state.
+- Alternatives considered:
+  - Declare documentation complete without a business registry
+  - Leave a partial catalogue and continue claiming the project is final
+- Impact: The repository meets the stated Phase 8 exit criteria: stakeholders can read one place to understand what was built, what it means, and where the logic remains limited.
+
+### 48) Treat catalogue owners as proposed functions until stakeholders confirm accountability
+- Date: 2026-10-28
+- Decision: Assign business functions as provisional owners in the KPI catalogue; do not present them as approved or named Kestrel owners.
+- Context: The assignment data and repository do not identify accountable people or provide governance sign-off evidence.
+- Alternatives considered:
+  - Invent named owners
+  - Omit owner metadata despite the Phase 8 requirement
+- Impact: The catalogue has usable role-level ownership proposals while clearly identifying stakeholder confirmation as a remaining governance action.
+
+### 49) Validate the complete pipeline in dependency order and preserve known defects as findings
+- Date: 2026-10-28
+- Decision: Run manifest validation, dimensions, facts, sales, KPI queries, and quality checks sequentially against the supplied data; record actual outcomes and do not treat known manifest defects as a clean pass.
+- Context: Unit tests validate query logic on fixtures but do not prove the end-to-end pipeline operates against the supplied multi-feed data.
+- Alternatives considered:
+  - Rely only on unit tests
+  - Skip known-bad source files without carrying the quality finding forward
+- Impact: Final readiness claims are based on generated outputs and observed counts, with source incompleteness retained as an explicit limitation.
+
 ## Current status
 
-The project has completed Phase 6: reusable sales and operational KPI queries.
+The project has implemented Phases 1-8. The end-to-end run completed on 2026-10-28; the pipeline ran successfully with the expected known source-quality findings listed below.
 
-The following artifacts are already in place:
+### End-to-end validation evidence (2026-10-28)
+
+- Manifest validation found 1,638 expected and 1,638 actual manifest-scoped partitions, with no missing partitions. It reported one telemetry partition mismatch and one unreadable telemetry Parquet file: `reefer_telemetry/dt=2025-07-14`, 5,779 readable rows versus 6,724 expected (945 rows short). The manifest summary counts the mismatch and unreadable file as two issue records for the same partition.
+- Phase 3 built 546 date rows, 8,640 outlet versions, 3,520 product versions, 8 warehouses, 5 carriers, 7,095 channel-history rows, and 1,054 UOM conversions.
+- Phase 4 built 4,000,000 POS rows, 3,598,770 telemetry rows, 1,496,000 WMS scan rows, and 963,307 order-header versions. It removed 84,000 exact POS duplicates and 115,156 exact telemetry duplicates; one unreadable telemetry file was explicitly excluded.
+- Phase 5 built 4,000,000 reconciled sales rows and 378 Finance week/channel comparisons. Event-date POS gross sales were INR 5,508,198,259.46. The Finance figures remain an independent synthetic benchmark and are not claimed as reconciled.
+- Phase 6 produced all eight KPI outputs: 72 gross-sales rows, 72 units rows, 152 chilled vehicle-day rows, 144 warehouse cycle-time rows, 144 service-proxy rows, 4,695 channel-change rows, one missing-data partition row, and three source-system order-value rows.
+- Phase 7 produced all six quality outputs. The summary flagged 199,156 removed duplicates, 988,211 telemetry anomaly rows, 237,870 order/warehouse groups with missing WMS stages, two manifest issue records, one feed outside the date-dimension range, and zero incomplete reference rows. The out-of-range feed is telemetry, whose corrected reading date reaches 2026-07-01 while `dim_date` ends 2026-06-30.
+- `python -m unittest discover -s tests -q` passed all 12 tests after the pipeline and quality-runner corrections.
+- All build summaries and the manifest report were regenerated under `curated/` and `docs/manifest_validation.json`. The raw assignment data was read-only.
+
+The pipeline completed successfully, but the data is not clean: those quality findings and the explicitly documented KPI proxy limitations remain material. The business-function owners in the catalogue are proposals pending stakeholder confirmation, not approved accountable owners.
+
+The following artifacts are now in place:
 - [README.md](./README.md)
 - [DECISIONS.md](./DECISIONS.md)
+- [KPI_CATALOGUE.md](./KPI_CATALOGUE.md)
 - [docs/assumptions.md](./docs/assumptions.md)
+- [docs/sales_reconciliation_findings.md](./docs/sales_reconciliation_findings.md)
 - [pipeline/profile_raw.py](./pipeline/profile_raw.py)
 - [pipeline/validate_manifest.py](./pipeline/validate_manifest.py)
 - [pipeline/build_dimensions.py](./pipeline/build_dimensions.py)
 - [pipeline/build_facts.py](./pipeline/build_facts.py)
 - [pipeline/build_sales.py](./pipeline/build_sales.py)
 - [pipeline/run_kpis.py](./pipeline/run_kpis.py)
+- [pipeline/run_quality.py](./pipeline/run_quality.py)
 - [sql/05_reconciliation/fact_reconciled_sales.sql](./sql/05_reconciliation/fact_reconciled_sales.sql)
 - [sql/05_reconciliation/sales_reconciliation_finance.sql](./sql/05_reconciliation/sales_reconciliation_finance.sql)
 - [sql/06_kpis/](./sql/06_kpis/)
-- [docs/sales_reconciliation_findings.md](./docs/sales_reconciliation_findings.md)
+- [sql/07_quality/](./sql/07_quality/)
 - [tests/test_build_dimensions.py](./tests/test_build_dimensions.py)
 - [tests/test_sales_reconciliation.py](./tests/test_sales_reconciliation.py)
 - [tests/test_kpi_queries.py](./tests/test_kpi_queries.py)
+- [tests/test_quality_queries.py](./tests/test_quality_queries.py)
+- [docs/raw_profile.json](./docs/raw_profile.json)
+- [docs/manifest_validation.json](./docs/manifest_validation.json)
 - [curated/facts/build_summary.json](./curated/facts/build_summary.json) (generated locally; not tracked)
 - [curated/sales/build_summary.json](./curated/sales/build_summary.json) (generated locally; not tracked)
 - [curated/kpis/build_summary.json](./curated/kpis/build_summary.json) (generated locally; not tracked)
-- [docs/raw_profile.json](./docs/raw_profile.json)
-- [docs/manifest_validation.json](./docs/manifest_validation.json)
+- [curated/quality/build_summary.json](./curated/quality/build_summary.json) (generated locally; not tracked)
 
 This decisions log is now being used as the formal place to record project decisions going forward.
 

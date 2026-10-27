@@ -124,6 +124,52 @@ outliers, missing WMS stage chains, date-range and row-count drift, and
 incomplete reference rows. This is the operational guardrail layer that tells a
 business user whether the KPI signal is credible before they act on it.
 
+## Phase 8: KPI catalogue and documentation
+
+The project now includes a formal KPI catalogue at `KPI_CATALOGUE.md`. It
+records the business definition, grain, source feeds, calculation logic,
+filters, assumptions, known limitations, and ownership for the implemented
+metrics and quality controls.
+
+The catalogue covers:
+- sales by channel
+- units sold in eaches
+- Finance comparison and variance interpretation
+- chilled excursion proxy by vehicle-day
+- warehouse receive-to-dispatch cycle-time proxy
+- dispatch service-level proxy
+- outlet channel change history
+- missing-data-day reporting
+- source-system order value review
+- operational quality summaries
+
+## End-to-end validation
+
+Run the stages in order, writing curated outputs to this repository and keeping
+the assignment data read-only:
+
+```powershell
+python pipeline\validate_manifest.py --root "D:\path\to\assignment-pack\data" --output docs\manifest_validation.json
+python pipeline\build_dimensions.py --root "D:\path\to\assignment-pack\data" --output curated\dimensions
+python pipeline\build_facts.py --root "D:\path\to\assignment-pack\data" --dimensions curated\dimensions --output curated\facts
+python pipeline\build_sales.py --root "D:\path\to\assignment-pack\data" --dimensions curated\dimensions --facts curated\facts --output curated\sales
+python pipeline\run_kpis.py --root "D:\path\to\assignment-pack\data" --dimensions curated\dimensions --facts curated\facts --sales curated\sales --validation-report docs\manifest_validation.json --output curated\kpis
+python pipeline\run_quality.py --root "D:\path\to\assignment-pack\data" --dimensions curated\dimensions --facts curated\facts --validation-report docs\manifest_validation.json --output curated\quality
+```
+
+Each stage writes a `build_summary.json` alongside its outputs. The expected
+telemetry manifest mismatch and unreadable file are known findings, not
+successful-clean-data assertions; see `docs\manifest_validation.json` and the
+Phase 7 quality outputs. The business owner roles in the KPI catalogue are
+proposals pending stakeholder confirmation.
+
+End-to-end validation was run on 2026-10-28. All pipeline stages completed:
+4.0 million POS and reconciled-sales rows, 3.60 million curated telemetry
+readings, 1.496 million WMS scans, and 963,307 order-header versions. The
+manifest check confirmed 1,638 expected partitions and reported the known
+945-row telemetry shortfall in `dt=2025-07-14`, including one unreadable file.
+See the generated summaries for full counts and quality results.
+
 ## Setup
 
 Use Python 3.10 or later. Install the project dependencies:
@@ -144,6 +190,7 @@ python -m pip install -r requirements.txt
 - `sql/05_reconciliation/` contains the Phase 5 sales and reconciliation SQL.
 - `sql/06_kpis/` contains the Phase 6 KPI queries.
 - `sql/07_quality/` contains the Phase 7 anomaly-detection and completeness SQL.
+- `KPI_CATALOGUE.md` is the Phase 8 metric registry and business-definition catalogue.
 - `docs/assumptions.md` captures source-contract risks and initial project assumptions.
 - `DECISIONS.md` is the project decision ledger.
 - `docs/raw_profile.json` is generated profiling metadata; it contains no source records.

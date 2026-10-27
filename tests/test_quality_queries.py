@@ -47,7 +47,6 @@ class QualityQueryTests(unittest.TestCase):
         self.connection.execute(
             """
             CREATE TABLE fact_sales_order_headers (
-                has_exact_duplicates BOOLEAN,
                 duplicate_rows_removed BIGINT
             )
             """
@@ -62,7 +61,7 @@ class QualityQueryTests(unittest.TestCase):
             "INSERT INTO fact_wms_scan_events VALUES (false, 0), (false, 0)"
         )
         self.connection.execute(
-            "INSERT INTO fact_sales_order_headers VALUES (true, 1), (false, 0)"
+            "INSERT INTO fact_sales_order_headers VALUES (1), (0)"
         )
 
         rows = self.execute_query("duplicate_record_counts")
