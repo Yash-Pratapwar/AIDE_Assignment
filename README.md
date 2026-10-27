@@ -87,6 +87,28 @@ Outputs are written to the ignored `curated\sales\` directory:
 
 The reusable SQL is in `sql\05_reconciliation\`. A critical limitation is documented in `docs\sales_reconciliation_findings.md`: although the generator comments describe legacy ingest-date and duplicate-counting defects, its Finance CSV values are generated independently at random rather than aggregated from source feeds. The report can be compared but cannot be numerically reconciled to source rows or used to prove those defects.
 
+## Phase 6: run the KPI query library
+
+After building Phases 2–5, run all Phase 6 SQL queries:
+
+```powershell
+python pipeline\run_kpis.py --root "D:\path\to\assignment-pack\data"
+```
+
+The default output is the ignored `curated\kpis\` directory. Each query in
+`sql\06_kpis\` writes a Parquet result, and `build_summary.json` records its row
+count and source query. The library covers sales and units by fiscal period,
+temperature excursions by observed vehicle-day, warehouse receive-to-dispatch
+time, a dispatch-timing service-level proxy, outlet channel changes, manifest
+partition issues, and order value by source system. The Phase 5 Finance
+reconciliation query remains in `sql\05_reconciliation\`.
+
+Operational results are deliberately qualified: telemetry has no trip or
+carrier key, WMS stages are not reliable lifecycle sequences in the supplied
+generator, and there is no delivery scan. See `DECISIONS.md` and
+`docs\assumptions.md` before treating the excursion, cycle-time, or service
+proxy outputs as production KPIs.
+
 ## Setup
 
 Use Python 3.10 or later. Install the project dependencies:
@@ -102,7 +124,9 @@ python -m pip install -r requirements.txt
 - `pipeline/build_dimensions.py` builds the Phase 3 Parquet dimensions and reference tables.
 - `pipeline/build_facts.py` builds the four Phase 4 facts and records duplicate handling and excluded source files.
 - `pipeline/build_sales.py` builds the POS-led reconciled sales fact and Finance comparison.
+- `pipeline/run_kpis.py` runs the Phase 6 SQL query library and writes query result Parquet files.
 - `sql/05_reconciliation/` contains the Phase 5 sales and reconciliation SQL.
+- `sql/06_kpis/` contains the Phase 6 KPI queries.
 - `docs/assumptions.md` captures source-contract risks and initial project assumptions.
 - `DECISIONS.md` is the project decision ledger.
 - `docs/raw_profile.json` is generated profiling metadata; it contains no source records.

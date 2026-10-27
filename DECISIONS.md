@@ -320,9 +320,66 @@ Whenever a decision is revised, capture the new decision and the reason for the 
 
 ---
 
+## Phase 6 decisions
+
+### 33) Keep KPI logic in versioned SQL and materialize reusable result tables
+- Date: 2026-10-27
+- Decision: Store each Phase 6 metric query in `sql/06_kpis/` and use a small Python runner only to register curated inputs, execute SQL, and write Parquet outputs.
+- Context: The project plan prioritizes SQL as the metric layer and requires queries to be reusable, testable, and runnable without interactive notebooks.
+- Alternatives considered:
+  - Embed metric logic in the runner
+  - Provide isolated SQL that users must wire up manually
+- Impact: Query definitions remain directly inspectable, while the runner gives users one command to produce a consistent KPI output set.
+
+### 34) Keep unresolved sales dimensions visible rather than excluding valid POS lines
+- Date: 2026-10-27
+- Decision: Sales KPI queries exclude invalid timestamp and ambiguous line-key records, but keep valid POS lines with unresolved outlet/product dimensions and report those counts.
+- Context: Dropping unresolved records would silently understate sales; the sales fact already preserves these rows and flags the lookup gaps.
+- Alternatives considered:
+  - Filter to fully resolved outlet and product records
+  - Add synthetic unknown dimension members
+- Impact: KPI totals remain traceable to valid POS evidence, with dimension coverage visible alongside them.
+
+### 35) Define chilled excursion output as a vehicle-day proxy, not a trip or carrier rate
+- Date: 2026-10-27
+- Decision: Report the share of observed vehicle-days with at least one valid temperature reading above 8°C, grouped by month and warehouse; do not call it a trip or carrier rate.
+- Context: Telemetry has no trip or carrier key. An observed vehicle-day is the narrowest reproducible grouping that does not invent trip boundaries. The feed contract specifically describes an excursion as a reading above the chilled upper bound.
+- Alternatives considered:
+  - Infer trips from arbitrary time gaps
+  - Attribute telemetry to carriers using route or vehicle guesses
+  - Report a reading-level rate as if it were a trip rate
+- Impact: The output is useful for diagnostic trend analysis but is not interchangeable with excursion rate per actual trip. Readings below 2°C are separately visible but do not enter the upper-bound numerator.
+
+### 36) Treat receive-to-dispatch and on-time dispatch as operational proxies
+- Date: 2026-10-27
+- Decision: Provide an exploratory receive-to-later-dispatch scan interval and a dispatched-order on-time-dispatch proxy, explicitly separate from validated warehouse cycle time and delivery service level.
+- Context: The generator assigns WMS scan stage, order, and day independently, omits approximately 6.5% of events, and the feeds contain no delivery scan or confirmed service target.
+- Alternatives considered:
+  - Present scan-based intervals and dispatch timing as definitive KPIs
+  - Omit all operational queries despite the assignment's core questions
+- Impact: Queries and coverage measures are available for review, but proxy results must not be reported as true lifecycle performance until the source data semantics are corrected.
+
+### 37) Use manifest validation findings as the missing-day KPI input
+- Date: 2026-10-27
+- Decision: The missing-data query reads partition issues from the Phase 2 validation report instead of comparing curated fact row counts with raw manifest row counts.
+- Context: Exact duplicates are removed from curated POS/telemetry facts and one unreadable telemetry file is explicitly excluded, so curated row counts are not directly comparable to raw manifest expectations.
+- Alternatives considered:
+  - Compare deduplicated fact counts with raw manifest counts
+  - Re-read every raw partition inside the KPI query
+- Impact: The KPI reports known raw partition/file defects without conflating them with downstream deduplication.
+
+### 38) Keep source-system order values unadjusted and non-comparable
+- Date: 2026-10-27
+- Decision: Report current ERP order values by source system with the known Partner API caveat, but do not adjust or rank systems as comparable accounting values.
+- Context: Finance documented an unresolved valuation difference for one source system and supplied no validated correction.
+- Alternatives considered:
+  - Apply an estimated adjustment
+  - Treat all source-system values as directly comparable
+- Impact: The query is descriptive diagnostic evidence; a reconciliation requires an approved valuation rule.
+
 ## Current status
 
-The project has completed Phase 5: reconciled POS sales and Finance comparison.
+The project has completed Phase 6: reusable sales and operational KPI queries.
 
 The following artifacts are already in place:
 - [README.md](./README.md)
@@ -333,13 +390,17 @@ The following artifacts are already in place:
 - [pipeline/build_dimensions.py](./pipeline/build_dimensions.py)
 - [pipeline/build_facts.py](./pipeline/build_facts.py)
 - [pipeline/build_sales.py](./pipeline/build_sales.py)
+- [pipeline/run_kpis.py](./pipeline/run_kpis.py)
 - [sql/05_reconciliation/fact_reconciled_sales.sql](./sql/05_reconciliation/fact_reconciled_sales.sql)
 - [sql/05_reconciliation/sales_reconciliation_finance.sql](./sql/05_reconciliation/sales_reconciliation_finance.sql)
+- [sql/06_kpis/](./sql/06_kpis/)
 - [docs/sales_reconciliation_findings.md](./docs/sales_reconciliation_findings.md)
 - [tests/test_build_dimensions.py](./tests/test_build_dimensions.py)
 - [tests/test_sales_reconciliation.py](./tests/test_sales_reconciliation.py)
+- [tests/test_kpi_queries.py](./tests/test_kpi_queries.py)
 - [curated/facts/build_summary.json](./curated/facts/build_summary.json) (generated locally; not tracked)
 - [curated/sales/build_summary.json](./curated/sales/build_summary.json) (generated locally; not tracked)
+- [curated/kpis/build_summary.json](./curated/kpis/build_summary.json) (generated locally; not tracked)
 - [docs/raw_profile.json](./docs/raw_profile.json)
 - [docs/manifest_validation.json](./docs/manifest_validation.json)
 
