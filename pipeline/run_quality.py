@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""Run the Phase 7 operational-quality SQL checks over curated tables."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+import duckdb
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_DATA_ROOTS = [
+    PROJECT_ROOT / "data",
+    PROJECT_ROOT.parent / "AIDE_Assignment_Pack_docs_and_generator_v1" / "data",
+]
+TABLES = {
+    "fact_pos_transactions": ("facts", "fact_pos_transactions"),
+    "fact_reefer_telemetry": ("facts", "fact_reefer_telemetry"),
+    "fact_wms_scan_events": ("facts", "fact_wms_scan_events"),
+    "fact_sales_order_headers": ("facts", "fact_sales_order_headers"),
+    "dim_warehouse": ("dimensions", "dim_warehouse"),
+    "dim_outlet": ("dimensions", "dim_outlet"),
+    "dim_product": ("dimensions", "dim_product"),
+    "dim_carrier": ("dimensions", "dim_carrier"),
+    "dim_date": ("dimensions", "dim_date"),
+}
+SQL_ROOT = PROJECT_ROOT / "sql" / "07_quality"
+
+
+def find_data_root(explicit_root: str | None) -> Path:
+    if explicit_root:
+        root = Path(explicit_root).resolve()
+        if root.name == "raw" and (root.parent / "reference").is_dir():
+            return root.parent
+        if root.is_dir():
+            return root
+        raise FileNotFoundError(f"Given data root does not exist: {root}")
+
+    for candidate in DEFAULT_DATA_ROOTS:
+        if candidate.is_dir():
+            return candidate
+
+    raise FileNotFoundError(
+        "Could not find the assignment data directory. Set --root to the folder containing raw/ and reference/."
+    )
+
+
+def sql_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def require_inputs(
+    dimensions_root: Path,
+    facts_root: Path,
+    validation_report: Path,
+) -> None:
+    required = [
+        facts_root / "fact_pos_transactions.parquet",
+        facts_root / "fact_reefer_telemetry.parquet",
+        facts_root / "fact_wms_scan_events.parquet",
+        facts_root / "fact_sales_order_headers.parquet",
+        dimensions_root / "dim_warehouse.parquet",
+        dimensions_root / "dim_outlet.parquet",
+        dimensions_root / "dim_product.parquet",
+        dimensions_root / "dim_carrier.parquet",
+        dimensions_root / "dim_date.parquet",
+    ]
+    missing = [path for path in required if not path.is_file()]
+    if missing:
+        paths = "\n".join(f"- {path}" for path in missing)
+        raise FileNotFoundError(f"Missing curated tables for Phase 7 quality checks:\n{paths}")
+    if not validation_report.is_file():
+        raise FileNotFoundError(f"Manifest validation report does not exist: {validation_report}")
+    sql_files = sorted(SQL_ROOT.glob("*.sql"))
+    if not sql_files:
+        raise FileNotFoundError(f"No Phase 7 quality SQL files found under {SQL_ROOT}")
+
+
+def load_manifest_issues(report_path: Path) -> list[tuple[Any, ...]]:
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    issues: list[tuple[Any, ...]] = []
+
+    for item in report.get("partition_mismatches", []):
+        issues.append(
+            (
+                item["feed"],
+                item["partition"],
+                "partition_mismatch",
+                item.get("expected_row_count"),
+                item.get("actual_row_count"),
+                item.get("expected_file_count"),
+                item.get("actual_file_count"),
+                None,
+            )
+        )
+    for item in report.get("missing_in_actual", []):
+        issues.append(
+            (
+                item["feed"],
+                item["partition"],
+                "partition_missing",
+                None,
+                None,
+                None,
+                None,
+                "Expected manifest partition is absent from the raw landing zone.",
+            )
+        )
+    for item in report.get("missing_in_manifest", []):
+        issues.append(
+            (
+                item["feed"],
+                item["partition"],
+                "partition_not_manifested",
+                None,
+                None,
+                None,
+                None,
+                "Raw partition is not represented in the expected-partitions manifest.",
+            )
+        )
+    for item in report.get("invalid_files", []):
+        issues.append(
+            (
+                item["feed"],
+                item["partition"],
+                "unreadable_file",
+                None,
+                None,
+                None,
+                None,
+                f"{item['file']}: {item['error']}",
+            )
+        )
+    return issues
+
+
+def create_empty_view(
+    connection: duckdb.DuckDBPyConnection,
+    view_name: str,
+    columns: str,
+) -> None:
+    connection.execute(
+        f"CREATE VIEW {view_name} AS SELECT {columns} WHERE FALSE"
+    )
+
+
+def build_quality(
+    data_root: Path,
+    dimensions_root: Path,
+    facts_root: Path,
+    output_root: Path,
+    validation_report: Path,
+) -> dict[str, Any]:
+    require_inputs(dimensions_root, facts_root, validation_report)
+    output_root.mkdir(parents=True, exist_ok=True)
+    connection = duckdb.connect()
+    try:
+        roots = {"dimensions": dimensions_root, "facts": facts_root}
+
+        for view_name, (folder, table_name) in TABLES.items():
+            source_path = roots[folder] / f"{table_name}.parquet"
+            if not source_path.is_file():
+                if view_name == "dim_warehouse":
+                    create_empty_view(connection, view_name, "CAST(NULL AS VARCHAR) AS warehouse_code, CAST(NULL AS VARCHAR) AS warehouse_name, CAST(NULL AS VARCHAR) AS city, CAST(NULL AS VARCHAR) AS region_name")
+                elif view_name == "dim_outlet":
+                    create_empty_view(connection, view_name, "CAST(NULL AS VARCHAR) AS outlet_code, CAST(NULL AS VARCHAR) AS outlet_name, CAST(NULL AS VARCHAR) AS city, CAST(NULL AS VARCHAR) AS channel")
+                elif view_name == "dim_product":
+                    create_empty_view(connection, view_name, "CAST(NULL AS VARCHAR) AS sku_code, CAST(NULL AS VARCHAR) AS product_name, CAST(NULL AS VARCHAR) AS category, CAST(NULL AS VARCHAR) AS brand")
+                elif view_name == "dim_carrier":
+                    create_empty_view(connection, view_name, "CAST(NULL AS VARCHAR) AS carrier_id, CAST(NULL AS VARCHAR) AS carrier_name, CAST(NULL AS VARCHAR) AS mode, CAST(NULL AS BIGINT) AS sla_hours")
+                elif view_name == "dim_date":
+                    create_empty_view(connection, view_name, "CAST(NULL AS DATE) AS calendar_date")
+                else:
+                    create_empty_view(
+                        connection,
+                        view_name,
+                        "CAST(NULL AS VARCHAR) AS placeholder",
+                    )
+                continue
+
+            connection.execute(
+                f"CREATE VIEW {view_name} AS "
+                f"SELECT * FROM read_parquet({sql_literal(str(source_path))})"
+            )
+
+        connection.execute(
+            """
+            CREATE TABLE manifest_partition_issues (
+                feed VARCHAR,
+                partition_name VARCHAR,
+                issue_type VARCHAR,
+                expected_rows BIGINT,
+                actual_rows BIGINT,
+                expected_files BIGINT,
+                actual_files BIGINT,
+                detail VARCHAR
+            )
+            """
+        )
+        issues = load_manifest_issues(validation_report)
+        if issues:
+            connection.executemany(
+                "INSERT INTO manifest_partition_issues VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                issues,
+            )
+
+        results: dict[str, Any] = {}
+        for sql_path in sorted(SQL_ROOT.glob("*.sql")):
+            query_name = sql_path.stem
+            output_path = output_root / f"{query_name}.parquet"
+            query = sql_path.read_text(encoding="utf-8")
+            connection.execute(
+                f"COPY ({query}) TO {sql_literal(str(output_path))} "
+                "(FORMAT PARQUET, COMPRESSION ZSTD)"
+            )
+            row_count = connection.execute(
+                f"SELECT count(*) FROM read_parquet({sql_literal(str(output_path))})"
+            ).fetchone()[0]
+            results[query_name] = {
+                "rows": row_count,
+                "sql": str(sql_path.relative_to(PROJECT_ROOT)),
+                "path": str(output_path),
+            }
+
+        summary = {
+            "data_root": str(data_root),
+            "source_roots": {
+                "dimensions": str(dimensions_root),
+                "facts": str(facts_root),
+                "manifest_validation_report": str(validation_report),
+            },
+            "output_directory": str(output_root),
+            "manifest_issue_rows": len(issues),
+            "queries": results,
+        }
+        summary_path = output_root / "build_summary.json"
+        summary_path.write_text(json.dumps(summary, indent=2, default=str), encoding="utf-8")
+        return summary
+    finally:
+        connection.close()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run the Phase 7 quality SQL library")
+    parser.add_argument("--root", default=None, help="Folder containing raw/, reference/, and curated outputs")
+    args = parser.parse_args()
+
+    data_root = find_data_root(args.root)
+    dimensions_root = data_root / "curated" / "dimensions"
+    facts_root = data_root / "curated" / "facts"
+    output_root = data_root / "curated" / "quality"
+    validation_report = data_root / "docs" / "manifest_validation.json"
+    build_quality(data_root, dimensions_root, facts_root, output_root, validation_report)
+
+
+if __name__ == "__main__":
+    main()

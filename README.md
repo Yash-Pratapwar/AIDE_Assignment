@@ -109,6 +109,21 @@ generator, and there is no delivery scan. See `DECISIONS.md` and
 `docs\assumptions.md` before treating the excursion, cycle-time, or service
 proxy outputs as production KPIs.
 
+## Phase 7: operational quality and anomaly detection
+
+Run the quality checks after the Phase 3-5 curated data and the manifest
+validation report exist:
+
+```powershell
+python pipeline\run_quality.py --root "D:\path\to\assignment-pack\data"
+```
+
+The default output is the ignored `curated\quality\` directory. The Phase 7
+SQL library in `sql\07_quality\` reports exact duplicate counts, telemetry
+outliers, missing WMS stage chains, date-range and row-count drift, and
+incomplete reference rows. This is the operational guardrail layer that tells a
+business user whether the KPI signal is credible before they act on it.
+
 ## Setup
 
 Use Python 3.10 or later. Install the project dependencies:
@@ -125,8 +140,10 @@ python -m pip install -r requirements.txt
 - `pipeline/build_facts.py` builds the four Phase 4 facts and records duplicate handling and excluded source files.
 - `pipeline/build_sales.py` builds the POS-led reconciled sales fact and Finance comparison.
 - `pipeline/run_kpis.py` runs the Phase 6 SQL query library and writes query result Parquet files.
+- `pipeline/run_quality.py` runs the Phase 7 operational-quality checks and writes the quality summary Parquet files.
 - `sql/05_reconciliation/` contains the Phase 5 sales and reconciliation SQL.
 - `sql/06_kpis/` contains the Phase 6 KPI queries.
+- `sql/07_quality/` contains the Phase 7 anomaly-detection and completeness SQL.
 - `docs/assumptions.md` captures source-contract risks and initial project assumptions.
 - `DECISIONS.md` is the project decision ledger.
 - `docs/raw_profile.json` is generated profiling metadata; it contains no source records.
