@@ -103,6 +103,17 @@ time, a dispatch-timing service-level proxy, outlet channel changes, manifest
 partition issues, and order value by source system. The Phase 5 Finance
 reconciliation query remains in `sql\05_reconciliation\`.
 
+To run one SQL query and preview its results, pass the SQL file to the
+standalone runner:
+
+```powershell
+python run_sql.py "sql\05_reconciliation\fact_reconciled_sales.sql"
+python run_sql.py "sql\06_kpis\gross_sales_by_channel.sql" --rows 10
+```
+
+The runner registers the available curated Parquet files as tables, prints the
+result row count, and shows up to 12 columns from the requested number of rows.
+
 Operational results are deliberately qualified: telemetry has no trip or
 carrier key, WMS stages are not reliable lifecycle sequences in the supplied
 generator, and there is no delivery scan. See `DECISIONS.md` and
