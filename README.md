@@ -1,6 +1,6 @@
 # Kestrel Provisions Analytical Foundation
 
-This repository contains the implementation for the AIDE take-home assignment. It profiles and validates the supplied raw feeds, builds canonical dimensions from reference data and ERP CDC, and records the decisions and source-data risks that affect downstream metrics.
+This repository profiles and validates the supplied raw feeds, builds canonical dimensions from reference data and ERP CDC, and records the decisions and source-data risks that affect downstream metrics.
 
 ## Data policy
 
