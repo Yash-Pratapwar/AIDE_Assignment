@@ -154,6 +154,38 @@ The catalogue covers:
 - source-system order value review
 - operational quality summaries
 
+## Phase 9: Executive Analytics Dashboard & CFO SQL Query Inspector
+
+The repository includes a standalone, interactive executive dashboard (`dashboard.html`) designed to answer the 8 core questions from the assignment brief with visual charts, lineage auditability, and data quality controls:
+
+1. **View directly in browser:**
+   Double-click `dashboard.html` or launch via the runner:
+   ```powershell
+   python run_dashboard.py
+   ```
+
+2. **Serve over local HTTP server:**
+   ```powershell
+   python run_dashboard.py --server --port 8000
+   ```
+
+3. **Regenerate dashboard from curated tables:**
+   ```powershell
+   python generate_dashboard.py
+   ```
+
+The dashboard includes:
+- **Executive Summary:** High-level scorecard and answers for all 8 executive brief questions.
+- **Gross Sales by Channel:** Quarterly & fiscal period selectors (FY25 Q4 – FY27 Q1), revenue mix charts, and net/tax/UOM breakdowns.
+- **Finance Reconciliation:** 378 comparison weeks, variance time-series against published Finance reports, and the 3 root causes explained.
+- **Units Sold in Eaches:** Monthly physical volume tracking and explicit UOM conversion governance callouts.
+- **Cold Chain Integrity:** Excursion trends by vehicle-day and warehouse, contrasting the 33% executive perception against the 17.5% vehicle-day / 7.2% reading reality, and documenting the missing carrier/trip data gap.
+- **Warehouse Cycle Time:** Dock-to-dispatch scan pairing and scanner buffer loss warnings (only 4.8% scan completion rate).
+- **Channel Shifts:** 4,695 outlet channel reclassifications with transition matrix and searchable outlet history.
+- **Source System Order Value:** Comparison across SFA_MOBILE, ERP_WEB, and PARTNER_API, highlighting the 100% freight caveat.
+- **Feed Quality & Missing Days:** Corrupt file identification (`dt=2025-07-14`) and 4 automated discovery mechanisms.
+- **CFO "Ask-Anything" SQL Inspector:** Interactive viewer displaying the exact DuckDB query, execution grain, and responsible business owner.
+
 ## End-to-end validation
 
 Run the stages in order, writing curated outputs to this repository and keeping
@@ -206,3 +238,6 @@ python -m pip install -r requirements.txt
 - `DECISIONS.md` is the project decision ledger.
 - `docs/raw_profile.json` is generated profiling metadata; it contains no source records.
 - `docs/manifest_validation.json` records the latest manifest validation result.
+- `dashboard.html` is the self-contained interactive executive dashboard.
+- `generate_dashboard.py` compiles curated DuckDB metrics and queries into the dashboard.
+- `run_dashboard.py` is the browser and HTTP server launcher for the dashboard.
